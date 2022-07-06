@@ -1,6 +1,7 @@
 #!/usr/bin/env python3.8
 #
-# Classically find cycle lengths of various N's and a's for Shor's algorithm.
+# Classically find cycle lengths of various N's and a's
+#   instead of using Shor's algorithm.
 
 
 from math import gcd
