@@ -10,6 +10,10 @@
 #   but it's RAM usage and runtime increase faster with more qubits.
 # Unlike Qiskit, this code doesn't do any approximations when adding a control
 #   to a multiple-qubit gate defined by a unitary matrix.
+#   Qiskit's approximate circuits were very complicated and would give
+#   relative phases, which either had no effect on probability of finding a
+#   factor or, believe it or not, increased it. I suppose these approximate
+#   circuits were not polynomial in logN as Shor's algorithm should be.
 #
 # The following is good at providing the circuit,
 # but it doesn't really explain how it works,
@@ -308,6 +312,9 @@ exit()
 #   N=49 = 7^2 has many a's that give zero probability if n_count < bits,
 #     and I read that you should check if N = prime^n before using Shor's,
 #     else you aren't guaranteed that there will be any a-value that works.
+#     n_count >= bits starts to get better probability of success,
+#     and I read somewhere that n_count should approximately be 2*bits,
+#     though they didn't say why.
 #   N=121 = 11^2 also has many a's that give zero probability of success.
 #     a's with cycle lengths of 110, 55, 10, and 5 give zero probability.
 #   N=253 has many zero-probability-for-success a's
