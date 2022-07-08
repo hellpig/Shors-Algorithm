@@ -2,6 +2,9 @@
 #
 # Classically find cycle lengths of various N's and a's
 #   instead of using Shor's algorithm.
+#
+# For even cycle lengths, I also try to guess factors of N.
+#   Note that this doesn't work for N = prime^n
 
 
 from math import gcd
@@ -75,6 +78,7 @@ for N in range(3, 1 << 8, 2):  # only odd N's
         '''
         if ( gcd(a,N) == 1 ):
 
+            # find period
             x = [1,a]
             last = a
             while True:
@@ -82,7 +86,16 @@ for N in range(3, 1 << 8, 2):  # only odd N's
                 x.append( last )
                 if (last == 1):
                     break
+            r = len(x) - 1   # period
 
-            print('a =', a, ':', len(x) - 1)
-
+            # see if r gives factors and print
+            if r&1:
+                print('a =', a, ':', r)
+            else:
+                factorsObtained = []
+                guesses = [gcd(a**(r//2)-1, N), gcd(a**(r//2)+1, N)]
+                for guess in guesses:
+                    if guess not in [1,N] and (N % guess) == 0:
+                        factorsObtained.append(guess)
+                print('a =', a, ':', r, factorsObtained)
 

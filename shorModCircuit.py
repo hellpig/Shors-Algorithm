@@ -12,6 +12,10 @@
 # The hope is to find some patterns that can be used for quickly
 # finding large-N circuits.
 #
+# In the future, I may extend the code to do sqrt(X) and sqrt(X)-dagger gates.
+# But I have no desire to reduce the number of bits by using patterns in the cycles
+#   because why do Shor's algorithm if you already know the cycle lengths?
+#
 # I believe SWAP and NOT gates and all the ways of controlling them are enough to
 #   realize any a%N gate. The following is a complete set of transformations...
 #      1↔2, 2↔3, 3↔4, ..., (N-2)↔(N-1)
