@@ -1,6 +1,6 @@
 #!/usr/bin/env python3.8
 #
-# For trying to figure out circuits to do a%N math.
+# For trying to figure out circuits to do times-a-mod-N math.
 # This code is not a sophisticated approach! I do a brute-force search of all
 #   NOT and SWAP gates and all ways of controlling NOT and SWAP gates.
 # The code finds all ways of doing this that take the same minimal amount of gates.
