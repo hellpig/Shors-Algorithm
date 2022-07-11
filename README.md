@@ -1,5 +1,5 @@
 # Shor's Algorithm
-Use NumPy instead of Qiskit to simulate a quantum computer that performs Shor's algorithm on any suitable integer.
+Use NumPy instead of Qiskit to simulate a quantum computer to perform Shor's algorithm on any suitable integer.
 
 Each Python file is standalone. **See the comments at the top of each file!**
 * shor.py: simulates the quantum computer
