@@ -2,7 +2,7 @@
 Use NumPy instead of Qiskit to simulate a quantum computer to perform Shor's algorithm on any suitable integer.
 
 Each Python file is standalone. **See the comments at the top of each file!**
-* shor.py: simulates the quantum computer
+* shor.py: simulates the quantum computer to perform Shor's algorithm
 * shorScan.py: classically finds cycle lengths of various N's (and *a*'s) instead of using Shor's quantum algorithm
 * shorModCircuit.py: for trying to figure out quantum circuits to do times-*a*-mod-N math
 
