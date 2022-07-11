@@ -82,9 +82,10 @@ from math import gcd, log
 # Import the is_strong_bpsw_prp(N) function for probable prime testing.
 # https://www.youtube.com/watch?v=jbiaz_aHHUQ&t=0s
 # https://gmpy2.readthedocs.io/en/latest/advmpz.html#advanced-number-theory-functions
-# I'd use the AKS method if I wanted a deterministic prime test...
-#   https://www.youtube.com/watch?v=HvMSRWTE2mI
-import gmpy2     # pip install gmpy2
+# I'd use the ECPP method if I wanted a deterministic prime test...
+#   https://github.com/root-z/ECPP
+#   from prime_test import prime
+from gmpy2 import is_strong_bpsw_prp     # pip install gmpy2
 
 
 
@@ -304,7 +305,7 @@ for k in range(2, int(log(N,3)) + 1):   # k=2 is all that is necessary if N = p1
 
 # It is wise to first test if N is prime!
 # N is provably not prime if the following function returns False.
-if gmpy2.is_strong_bpsw_prp(N):
+if is_strong_bpsw_prp(N):
     print(' *** N =', N, 'is almost certainly prime ***')
     exit()
 
@@ -336,7 +337,11 @@ exit()
 
 
 # In reality, you'd probably stop the algorithm once a factor was found,
-#   but I make a loop over all a's (and all non-zero in probs[]) for analysis.
+#   but, for analysis, I make a loop over all a's and all non-zero in probs[].
+# If you instead want to get specific results,
+#   do something like the following to get i and p from probs[]...
+#     i = np.random.choice(range(len(probs)), p = probs/sum(probs))
+#     p = probs[i]
 #
 # N=65 has a = 8,18,47,57 give 0 probability of success for n_count = bits - 1.
 # N=77 has many a's that give 0 probability of success for n_count = bits - 1.
