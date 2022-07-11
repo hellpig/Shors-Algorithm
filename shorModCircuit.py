@@ -15,9 +15,12 @@
 # In the future, I may extend the code to do sqrt(X) and sqrt(X)-dagger gates.
 # But I have no desire to reduce the number of bits by using patterns in the cycles
 #   because why do Shor's algorithm if you already know the cycle lengths?
+# Since the times-a-mod-N gates are to be controlled, I could also play around
+#   with the idea of only controlling some of the gates in the times-a-mod-N gate.
 #
 # I believe SWAP and NOT gates and all the ways of controlling them are enough to
-#   realize any a%N gate. The following is a complete set of transformations...
+#   realize any times-a-mod-N gate.
+#   The following is a complete set of transformations...
 #      1↔2, 2↔3, 3↔4, ..., (N-2)↔(N-1)
 #   as doing multiple transformations in a row allows us to shift the 1's and 0's
 #      around in all necessary ways.
