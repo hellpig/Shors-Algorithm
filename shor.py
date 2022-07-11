@@ -5,7 +5,7 @@
 #   https://www.youtube.com/watch?v=lvTqbM5Dq4Q
 # where the above video's g is my a, and their p is my r.
 #
-# This code just uses NumPy (not Qiskit) to simulate a quantum computer!
+# This code uses only NumPy (not Qiskit) to simulate a quantum computer!
 # This causes it to run very fast with little RAM if not using many qubits,
 #   but it's RAM usage and runtime increase faster with more qubits.
 # Unlike Qiskit, this code doesn't do any approximations when adding a control
@@ -15,10 +15,11 @@
 #   factor or, believe it or not, increased it. I suppose these approximate
 #   circuits were not polynomial in logN as Shor's algorithm should be.
 #
-# The following is good at providing the circuit,
+# The following link is good at providing the circuit,
 # but it doesn't really explain how it works,
-# and it writes a^2^j when it means a^(2^j),
-# because a^2^j = (a^2)^j = a^(2*j).
+# and it writes a^2^j when it means a^(2^j).
+# Note that a^2^j = (a^2)^j = a^(2*j).
+# I used the following link to build my circuit...
 #   https://qiskit.org/textbook/ch-algorithms/shor.html
 # Changes I made to their circuit...
 #  - I added in a test for if r is odd.
@@ -92,7 +93,7 @@ from gmpy2 import is_strong_bpsw_prp     # pip install gmpy2
 # Set N, an odd integer such that N > 2
 # Not-prime odd N less than 128 are: 9, 15, 21, 25, 27, 33, 35, 39, 45, 49, 51, 55, 57, 63,
 #   65, 69, 75, 77, 81, 85, 87, 91, 93, 95, 99, 105, 111, 115, 117, 119, 121, 123, 125
-# If using 7+6 qubits, the above won't take more than 1.55 GiB.
+# If using 7+6 qubits (bits + n_count), the above won't take more than 1.55 GiB.
 #   The 13 qubits make a matrix, so 2^26 numbers.
 #   On my computer, each np.csingle or np.double is 2^3 bytes,
 #     so 2^29 bytes = 0.5 GiB for one matrix.
