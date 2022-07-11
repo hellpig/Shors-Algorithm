@@ -1,10 +1,10 @@
 #!/usr/bin/env python3.8
 #
 # Classically find cycle lengths of various N's and a's
-#   instead of using Shor's algorithm.
+#   instead of using Shor's quantum algorithm.
 #
 # For even cycle lengths, I also try to guess factors of N.
-#   Note that this doesn't work for N = prime^n
+#   You can verify that this doesn't work for N = prime^n
 
 
 from math import gcd
