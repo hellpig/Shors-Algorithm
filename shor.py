@@ -5,7 +5,7 @@
 #   https://www.youtube.com/watch?v=lvTqbM5Dq4Q
 # where the above video's g is my a, and their p is my r.
 #
-# This code just uses NumPy (not Qiskit)!
+# This code just uses NumPy (not Qiskit) to simulate a quantum computer!
 # This causes it to run very fast with little RAM if not using many qubits,
 #   but it's RAM usage and runtime increase faster with more qubits.
 # Unlike Qiskit, this code doesn't do any approximations when adding a control
@@ -30,7 +30,7 @@
 #    so a=N-1 can always be skipped.
 #  - You can now run any N!
 #  - I removed the swaps from the QFTdagger
-#    and reversed the order that the control bits connect
+#    then reversed the order that the control bits connect
 #
 # 4 auxiliary qubits are needed to do mod15 arithmetic.
 # These 4 qubits can do up to mod16 arithmetic (2^4 = 16).
@@ -71,16 +71,25 @@
 
 
 
-import numpy as np
+import numpy as np    # pip install numpy
 from fractions import Fraction
 import time
 
+from math import gcd, log
+# np.gcd(A,B) has a bug for A or B in interval [2^63, 2^64)
+#   that causes the code to crash, so use math.gcd()
 
+# Import the is_strong_bpsw_prp(N) function for probable prime testing.
+# https://www.youtube.com/watch?v=jbiaz_aHHUQ&t=0s
+# https://gmpy2.readthedocs.io/en/latest/advmpz.html#advanced-number-theory-functions
+# I'd use the AKS method if I wanted a deterministic prime test...
+#   https://www.youtube.com/watch?v=HvMSRWTE2mI
+import gmpy2     # pip install gmpy2
 
 
 
 # Set N, an odd integer such that N > 2
-# Not prime N less than 128 are: 9, 15, 21, 25, 27, 33, 35, 39, 45, 49, 51, 55, 57, 63,
+# Not-prime odd N less than 128 are: 9, 15, 21, 25, 27, 33, 35, 39, 45, 49, 51, 55, 57, 63,
 #   65, 69, 75, 77, 81, 85, 87, 91, 93, 95, 99, 105, 111, 115, 117, 119, 121, 123, 125
 # If using 7+6 qubits, the above won't take more than 1.55 GiB.
 #   The 13 qubits make a matrix, so 2^26 numbers.
@@ -93,11 +102,14 @@ import time
 #     on my crappy 2-physical-core x86-64 computer.
 #     Runtime seems to get be proportional to 8^(bits + n_count).
 
-N = 63
+N = 15
 
 
 
 # calculate bits needed for N
+if N <= 1 or not isinstance(N, int):   # make sure N isn't ridiculous
+    print(' Error: do better!')
+    exit()
 bits = 0
 temp = N
 while temp:
@@ -128,7 +140,6 @@ n_count = bits - 1
 
 
 
-
 # gates on a single qubit (global variables)
 H = np.array([[1,1],[1,-1]]) / np.sqrt(2)  # Hadamard
 I = np.array([[1,0],[0,1]]) * 1.0          # Identity
@@ -137,6 +148,7 @@ X = np.array([[0,1],[1,0]]) * 1.0          # NOT gate
 
 
 
+# Returns a matrix operator for times-a-to-power-mod-N.
 # Unlike every other part of the circuit, this function is "magic" in that it
 #   doesn't need to know the exact quantum logic gates needed to make the matrix.
 #   The next step for me would be to make a general algorithm to create
@@ -282,6 +294,24 @@ def simulateShor(a, n_count, bits, N):
 
 
 
+# N should not equal prime^k
+# It's easier to check that N isn't any integer to a power, so I do that.
+for k in range(2, int(log(N,3)) + 1):   # k=2 is all that is necessary if N = p1 * p2
+    temp = round( N ** (1.0/k) )
+    if N == temp**k:
+        print('\n  ***** N =', temp, '^', k, '*****')
+        exit()
+
+# It is wise to first test if N is prime!
+# N is provably not prime if the following function returns False.
+if gmpy2.is_strong_bpsw_prp(N):
+    print(' *** N =', N, 'is almost certainly prime ***')
+    exit()
+
+# N cannot be even.
+if not N&1:
+    print(' *** 2 is a factor of N ***')
+    exit()
 
 print("\n N =", N)
 print(" n_count =", n_count)
@@ -307,26 +337,21 @@ exit()
 
 # In reality, you'd probably stop the algorithm once a factor was found,
 #   but I make a loop over all a's (and all non-zero in probs[]) for analysis.
-# Note that, for N=25, some a's give 0 probability of success
-#   regardless of n_count (ones that have a cycle length of 4).
-#   N=49 = 7^2 has many a's that give zero probability if n_count < bits,
-#     and I read that you should check if N = prime^n before using Shor's,
-#     else you aren't guaranteed that there will be any a-value that works.
-#     n_count >= bits starts to get better probability of success,
-#     and I read somewhere that n_count should approximately be 2*bits,
-#     though they didn't say why.
-#   N=121 = 11^2 also has many a's that give zero probability of success.
-#     a's with cycle lengths of 110, 55, 10, and 5 give zero probability.
-#   N=253 has many zero-probability-for-success a's
-#     (whenever cycle length is 55 or 110).
+#
+# N=65 has a = 8,18,47,57 give 0 probability of success for n_count = bits - 1.
+# N=77 has many a's that give 0 probability of success for n_count = bits - 1.
+#   This happens if and only if the cycle length is 15 or 30.
+#   n_count >= bits starts to get better probability of success,
+#   and I read somewhere that n_count should approximately be 2*bits,
+#   though they didn't say why.
 
-#for a in [2]:
+#for a in [3,4,17]:
 for a in range(2, N-1):
 
     print('\n\n      a =', a, '---------------------------------------', flush=True)
 
     # a,N must be coprime
-    test = np.gcd(a,N)
+    test = gcd(a,N)
     if test != 1:
         print("\n*** Non-trivial factor found: gcd(a,N) = %i ***" % test)
         continue
@@ -355,7 +380,7 @@ for a in range(2, N-1):
             #print(" Result: r =", r)
 
             success = False
-            guesses = [np.gcd(a**(r//2)-1, N), np.gcd(a**(r//2)+1, N)]
+            guesses = [gcd(a**(r//2)-1, N), gcd(a**(r//2)+1, N)]
             print(" Guessed Factors: %i and %i" % (guesses[0], guesses[1]))
             for guess in guesses:
                 if guess not in [1,N] and (N % guess) == 0:
