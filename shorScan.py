@@ -3,11 +3,20 @@
 # Classically find cycle lengths of various N's and a's
 #   instead of using Shor's quantum algorithm.
 #
-# For even cycle lengths, I also try to guess factors of N.
+# For even cycle lengths, guess factors of N.
 #   You can verify that this doesn't work for N = prime^n
+#
+# If any factors are found, calculate the minimum n_count
+#   that would be necessary to find r using a quantum computer.
+#   You might need even more than this if the probability of
+#   getting certain states is zero (or very low), but you
+#   need at least that amount. Of course, just because the
+#   quantum computer cannot find r doesn't mean that it cannot
+#   find primes.
 
 
 from math import gcd
+from fractions import Fraction
 
 
 # https://en.wikipedia.org/wiki/Carmichael_function
@@ -59,6 +68,19 @@ def prime_factors(n):
 
 
 
+# find minimum n_count necessary
+def getNcount(r, N):
+    n_count = 1
+    for n_count in range(1,10000):
+        maxResult = 1 << n_count
+        for i in range(1, maxResult):
+            if Fraction(i/maxResult).limit_denominator(N-1).denominator == r:
+                return n_count
+    return -1  # should never happen
+
+
+
+
 for N in range(3, 1 << 8, 2):  # only odd N's
 
     factN = prime_factors(N)
@@ -97,5 +119,8 @@ for N in range(3, 1 << 8, 2):  # only odd N's
                 for guess in guesses:
                     if guess not in [1,N] and (N % guess) == 0:
                         factorsObtained.append(guess)
-                print('a =', a, ':', r, factorsObtained)
+                if factorsObtained:
+                    print('a =', a, ':', r, factorsObtained, ' n_count =', getNcount(r,N))
+                else:
+                    print('a =', a, ':', r, factorsObtained)
 
