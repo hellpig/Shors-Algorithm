@@ -7,7 +7,7 @@
 #
 # This code uses only NumPy (not Qiskit) to simulate a quantum computer!
 # This causes it to run very fast with little RAM if not using many qubits,
-#   but it's RAM usage and runtime increase faster with more qubits.
+#   but it's RAM usage increases faster with more qubits.
 # Unlike Qiskit, this code doesn't do any approximations when adding a control
 #   to a multiple-qubit gate defined by a unitary matrix.
 #   Qiskit's approximate circuits were very complicated and would give
@@ -98,13 +98,13 @@ from gmpy2 import is_strong_bpsw_prp     # pip install gmpy2
 #   On my computer, each np.csingle or np.double is 2^3 bytes,
 #     so 2^29 bytes = 0.5 GiB for one matrix.
 #   In general, RAM should be proportional to 4^(bits + n_count),
-#     and be approximately 3 * 2^( 2 * (bits + n_count) + 3),
+#     and be less than 3 * 2^( 2 * (bits + n_count) + 3),
 #     though NumPy will sometimes use some RAM-saving tricks for its arrays!
-#   And 7+6 takes 6 minutes for each of the coprime a's
+#   And 7+6 takes a few seconds for each of the coprime a's
 #     on my crappy 2-physical-core x86-64 computer.
 #     Runtime seems to get be proportional to 8^(bits + n_count).
 
-N = 15
+N = 65
 
 
 
@@ -183,22 +183,6 @@ def CPhaseGate(theta, control, target):
     return output
 
 
-# Returns the matrix of the initial Hadamard gates
-def make_multiH(n_count):
-    output = H
-    for i in range(1, n_count):
-        output = np.kron(output, H)
-    return output
-#    return np.kron( np.eye( 1 << (n_count-1) ), X)
-#    return np.kron(np.kron( np.eye( 1 << (n_count-2) ), X), np.eye(1 << 1))
-#    return np.kron( X, np.eye( 1 << (n_count-1) ))
-
-
-
-# Returns the matrix of the initial state being 0...001
-def make_oneState(bits):
-    return np.kron( np.eye( 1 << (bits-1) ), X)
-
 
 
 # Returns the matrix of the QFT-dagger gate
@@ -212,6 +196,26 @@ def make_qft_dagger(n_count):    # n-qubit QFTdagger
             output = CPhaseGate(-np.pi/(1 << (k-m)), m, k) @ output
         output = np.kron( np.eye(1 << k), H ) @ output
     return output
+
+
+
+'''
+# Returns the matrix of the initial Hadamard gates
+def make_multiH(n_count):
+    output = H
+    for i in range(1, n_count):
+        output = np.kron(output, H)
+    return output
+#    return np.kron( np.eye( 1 << (n_count-1) ), X)
+#    return np.kron(np.kron( np.eye( 1 << (n_count-2) ), X), np.eye(1 << 1))
+#    return np.kron( X, np.eye( 1 << (n_count-1) ))
+
+
+
+# Returns the matrix to make the initial state be 0...001
+def make_oneState(bits):
+    return np.kron( np.eye( 1 << (bits-1) ), X)
+'''
 
 
 
@@ -247,7 +251,7 @@ def simulateShor(a, n_count, bits, N):
 
     print(' --starting simulation--', time.time(), flush=True)
 
-    bigArray = np.kron(multiH, oneState)
+    state = np.array(state1)
 
     length = 1 << n_count
     step = 1 << bits
@@ -261,16 +265,14 @@ def simulateShor(a, n_count, bits, N):
             if ( i >> q ) & 1:   # control U's starting at the bottom of the n_count qubits
                 bigNext[ i*step:(i+1)*step, i*step:(i+1)*step ] = U
 
-        # requires a lot of runtime!
-        bigArray = bigNext @ bigArray
+        state = bigNext @ state
 
-    # Complex numbers are now needed for only a tiny amount of runtime.
+    # Complex numbers are now needed.
     #   np.cdouble (complex128 on my computer) uses more RAM,
     #   and it is slower than np.csingle (complex64 on my computer)
     #   perhaps due to RAM bandwidth
-    bigArray = bigArray[:,0].astype(np.csingle)   # actually only the first column of bigArray (to speed things up!)
     bigNext = np.kron(qft_dagger.astype(np.csingle), np.eye(step, dtype=np.csingle))
-    state = bigNext @ bigArray    # I don't need to grab the first column because bigArray is only a column!
+    state = bigNext @ state.astype(np.csingle)
 
     '''
     # For testing purposes...
@@ -320,11 +322,12 @@ print(" n_count =", n_count)
 
 
 # make some relatively-small global arrays
-multiH = make_multiH(n_count)
 qft_dagger = make_qft_dagger(n_count)
 swaps = getSwaps(n_count)
-oneState = make_oneState(bits)
-
+# computer starts in state [1,0,0,...,0], that is, with all qubits being 0
+#state1 = np.kron(make_multiH(n_count), make_oneState(bits))[:,0]  # not fastest way
+state1 = np.zeros( 1 << (bits + n_count) )
+state1[1::(1 << bits)] = 1.0 / np.sqrt(2) ** n_count
 
 
 '''
@@ -351,6 +354,8 @@ exit()
 #   and I read somewhere that n_count should approximately be 2*bits,
 #   though they didn't say why.
 
+
+#for a in [2]:
 #for a in [3,4,17]:
 for a in range(2, N-1):
 
