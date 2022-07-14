@@ -89,20 +89,13 @@ for i in range( bits - int(extraBit) ):
 print(M)
 '''
 
-# print all the before and after states in binary form and calculate U[]
+# print all the before and after states in binary form and calculate indices[]
 U = np.eye(1 << bits)
+indices = np.asarray([i for i in range(1 << bits)]) 
 for start in range(1,N):
     final = (start*a)%N
     print(" ", "{:b}".format(start).rjust(bits, '0'), 'to', "{:b}".format(final).rjust(bits, '0') )
-    if start != final:
-        U[start, start] = 0
-        U[final, start] = 1
-
-# Using the fewest quantum logic gates will likely return a different matrix
-#   with a different 0th column and with different Nth, (N+1)th, etc. columns.
-#   Note that these columns are never actually used.
-#print(U)
-#print(U @ np.transpose(U))   # is the identity matrix if and only if U is unitary
+    indices[final] = start
 
 
 
@@ -129,7 +122,7 @@ def mcx(target, controlList=()):
     target = bits - 1 - target
     controlList = [bits - 1 - i for i in controlList]
 
-    output = np.eye(1 << bits)
+    indices = np.asarray([i for i in range(1 << bits)]) 
     for i in range( (1 << bits) - 1 ):
 
         go = True
@@ -139,9 +132,9 @@ def mcx(target, controlList=()):
 
         if go and not ((i >> target) & 1):
             j = i + (1 << target)
-            output[[i, j], :] = output[[j, i], :]
+            indices[[i, j]] = indices[[j, i]]
 
-    return output
+    return indices
 
 
 
@@ -157,7 +150,7 @@ def mcswap(targetPair, controlList=()):
     targetPair = [bits - 1 - i for i in targetPair]
     controlList = [bits - 1 - i for i in controlList]
 
-    output = np.eye(1 << bits)
+    indices = np.asarray([i for i in range(1 << bits)]) 
     for i in range( (1 << bits) - 1 ):
 
         go = True
@@ -167,9 +160,9 @@ def mcswap(targetPair, controlList=()):
 
         if go and not ((i >> targetPair[0]) & 1) and ((i >> targetPair[1]) & 1):
             j = i + (1 << targetPair[0]) - (1 << targetPair[1])
-            output[[i, j], :] = output[[j, i], :]
+            indices[[i, j]] = indices[[j, i]]
 
-    return output
+    return indices
 
 
 
@@ -207,10 +200,10 @@ print('  number of possible gates =', length)
 
 # brute force it!
 
-U = U[1:N, 1:N]  # only elements 1,2,...,N-1 need to match
+indices = indices[1:N]  # only elements 1,2,...,N-1 need to match
 
-if np.all( U == np.eye(N-1) ):
-    print('  No gates needed. U is the identity matrix.')
+if np.all( indices == np.asarray([i for i in range(1,N)])  ):
+    print('  No gates needed other than the identity matrix.')
     exit()
 
 # might be useful
@@ -223,14 +216,14 @@ while num > 0:
     for arrangement in product(range(length), repeat=num):
 
         # Two gates in a row undo each other.
-        # I should probably do more tests to remove more arrangements!
+        # I should probably do more tests like this to remove more arrangements!
         if any(np.diff(arrangement)==0):    # to slightly help runtime
             continue
 
-        guess = np.eye(1 << bits)
+        guess = np.asarray([i for i in range(1 << bits)]) 
         for i in arrangement:
-            guess = gates[i] @ guess
-        if np.all( guess[1:N, 1:N] == U ):
+            guess = guess[gates[i]]
+        if np.all( guess[1:N] == indices ):
             print(arrangement)
             for i in arrangement:
                 print(' ', list(controls[i]), targets[i])

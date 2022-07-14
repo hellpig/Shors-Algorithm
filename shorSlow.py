@@ -6,7 +6,8 @@
 # where the above video's g is my a, and their p is my r.
 #
 # This code uses only NumPy (not Qiskit) to simulate a quantum computer!
-# This makes the code much faster with much less RAM.
+# This causes it to run very fast with little RAM if not using many qubits,
+#   but it's RAM usage increases faster with more qubits.
 # Unlike Qiskit, this code doesn't do any approximations when adding a control
 #   to a multiple-qubit gate defined by a unitary matrix.
 #   Qiskit's approximate circuits were very complicated and would give
@@ -92,16 +93,17 @@ from gmpy2 import is_strong_bpsw_prp     # pip install gmpy2
 # Set N, an odd integer such that N > 2
 # Not-prime odd N less than 128 are: 9, 15, 21, 25, 27, 33, 35, 39, 45, 49, 51, 55, 57, 63,
 #   65, 69, 75, 77, 81, 85, 87, 91, 93, 95, 99, 105, 111, 115, 117, 119, 121, 123, 125
-# If using 9+8 qubits (bits + n_count)...
-#   The 17 qubits make a vector of 2^17 numbers.
+# If using 7+6 qubits (bits + n_count), the above won't take more than 1.55 GiB.
+#   The 13 qubits make a matrix, so 2^26 numbers.
 #   On my computer, each np.csingle or np.double is 2^3 bytes,
-#     so 2^20 bytes = 1 MiB for one vector.
-#   In general, RAM should be proportional to 2^(bits + n_count).
-#   And 9+8 takes 1.5 seconds for each of the coprime a's
-#     on my crappy x86-64 CPU core.
-#   Runtime is affected by n_count much more than by bits.
+#     so 2^29 bytes = 0.5 GiB for one matrix.
+#   In general, RAM should be proportional to 4^(bits + n_count),
+#     and be less than 3 * 2^( 2 * (bits + n_count) + 3),
+#     though NumPy will sometimes use some RAM-saving tricks for its arrays!
+#   And 7+6 takes a few seconds for each of the coprime a's
+#     on my crappy 2-physical-core x86-64 computer.
 
-N = 77
+N = 65
 
 
 
@@ -139,15 +141,107 @@ n_count = bits - 1
 
 
 
+# gates on a single qubit (global variables)
+H = np.array([[1,1],[1,-1]]) / np.sqrt(2)  # Hadamard
+I = np.array([[1,0],[0,1]]) * 1.0          # Identity
+X = np.array([[0,1],[1,0]]) * 1.0          # NOT gate
 
-# Returns indices for performing the times-a-to-power-mod-N operator.
+
+
+
+# Returns a matrix operator for times-a-to-power-mod-N.
+# Unlike every other part of the circuit, this function is "magic" in that it
+#   doesn't need to know the exact quantum logic gates needed to make the matrix.
+#   The next step for me would be to make a general algorithm to create
+#   np.linalg.matrix_power(unitaryM, power) from actual gates.
+# In fact, using the fewest quantum logic gates may likely return a different matrix
+#   with a different 0th column and with different Nth, (N+1)th, etc. columns.
+#   Note that these columns are never actually used.
+
 def amodN(a, power, bits, N):
-    a = (a ** power)%N
-    indices = np.asarray([i for i in range(1 << bits)]) 
-    for start in range(1,N):
-        #indices[start] = (start*a)%N   # reverse cycling shouldn't make a difference
-        indices[(start*a)%N] = start
-    return indices
+    unitaryM = np.eye(1 << bits)
+    for start in range(1,N):  # going all the way to (1 << bits) prevents unitaryM from being unitary
+        final = (start*a)%N
+        if start != final:   # does this IF statement reduce runtime?
+            unitaryM[start, start] = 0.0
+            unitaryM[final, start] = 1.0
+    return np.linalg.matrix_power(unitaryM, power)
+
+
+
+# Returns the matrix of a Controlled-Phase gate
+# It's not a general function since it assumes the target is the final qubit
+def CPhaseGate(theta, control, target):
+    size = 1 << (target+1)
+    output = np.eye( size ) * (1.0 + 0j)
+    value = np.exp(1j * theta)
+    for i in range(1, size, 2):
+        if ( i >> (target - control) ) & 1:
+            # will be true half the time, so 1/4 of nonzero elements of output[]
+            output[i,i] = value
+    return output
+
+
+
+
+# Returns the matrix of the QFT-dagger gate
+# I don't do the SWAP gates because it's easier to simply
+#   swap the order of the qubits that control the amodN gates.
+def make_qft_dagger(n_count):    # n-qubit QFTdagger
+    output = 1. + 0j
+    for k in range(n_count):
+        output = np.kron( output, I )
+        for m in range(k):
+            output = CPhaseGate(-np.pi/(1 << (k-m)), m, k) @ output
+        output = np.kron( np.eye(1 << k), H ) @ output
+    return output
+
+
+
+
+# Returns the matrix of the initial Hadamard gates
+def make_multiH(n_count):
+    output = H
+    for i in range(1, n_count):
+        output = np.kron(output, H)
+    return output
+#    return np.kron( np.eye( 1 << (n_count-1) ), X)
+#    return np.kron(np.kron( np.eye( 1 << (n_count-2) ), X), np.eye(1 << 1))
+#    return np.kron( X, np.eye( 1 << (n_count-1) ))
+
+
+
+# Returns the matrix to make the initial state be 0...001
+def make_oneState(bits):
+    return np.kron( np.eye( 1 << (bits-1) ), X)
+
+
+
+
+# Returns the matrix of SWAP gates that flip an entire set of qubits.
+# My circuit never uses this.
+# It is used later for conveniently analyzing the results of the n_count qubits.
+def getSwaps(n_count):
+    length = 1 << n_count
+
+    labels = [[b'0']*n_count for i in range(length)]
+    backward = [[b'0']*n_count for i in range(length)]
+    for b in range(n_count):  # b is binary digit
+        for i in range(length):
+            if (i >> b) & 1:
+                labels[i][-b-1] = b'1'
+                backward[i][b] = b'1'
+
+    swaps = np.eye(length)
+    for i in range(length-1):
+        if (labels[i] == backward[i]):  # do this for speed
+            continue
+        for j in range(i+1,length):
+            if labels[i] == backward[j]:
+                swaps[[i, j], :] = swaps[[j, i], :]
+                break
+
+    return swaps
 
 
 
@@ -156,35 +250,28 @@ def simulateShor(a, n_count, bits, N):
 
     print(' --starting simulation--', time.time(), flush=True)
 
-    # take care of initial Hadamard gates and NOT gate
-    state = np.zeros( 1 << (bits + n_count) )
-    state[1::(1 << bits)] = 1.0 / np.sqrt(2) ** n_count
+    state = np.array(state1)
 
-    # do the amodN() part of circuit
     length = 1 << n_count
     step = 1 << bits
     for q in range(n_count):
 
         U = amodN(a, 1 << q, bits, N)
 
+        # make bigNext be block-diagonal with Identities and U's
+        bigNext = np.eye(1 << (n_count+bits))
         for i in range(length):
             if ( i >> q ) & 1:   # control U's starting at the bottom of the n_count qubits
-                state[ i*step:(i+1)*step ] = state[ i*step:(i+1)*step ][U]
+                bigNext[ i*step:(i+1)*step, i*step:(i+1)*step ] = U
 
-    del U
+        state = bigNext @ state
 
-    # Complex numbers are now needed for the QFTdagger.
+    # Complex numbers are now needed.
     #   np.cdouble (complex128 on my computer) uses more RAM,
     #   and it is slower than np.csingle (complex64 on my computer)
     #   perhaps due to RAM bandwidth
-    stateOld = state.astype(np.csingle)
-    state = np.zeros(len(state), dtype=np.csingle)
-    mult = np.array(-np.pi * 1.0j / (1 << (n_count - 1))).astype(np.csingle)
-    for i in range(length):      # rows of QFTdagger
-        for j in range(length):  # columns of QFTdagger
-            state[ i*step:(i+1)*step ] += np.exp(mult*i*j) * stateOld[ j*step:(j+1)*step ]
-    del stateOld
-    state /= np.sqrt(length)
+    bigNext = np.kron(qft_dagger.astype(np.csingle), np.eye(step, dtype=np.csingle))
+    state = bigNext @ state.astype(np.csingle)
 
     '''
     # For testing purposes...
@@ -192,17 +279,18 @@ def simulateShor(a, n_count, bits, N):
     print(state)
     '''
 
-    probs = np.absolute(state).astype(np.double) ** 2       # now becomes np.double again
+    probs = np.absolute(state).astype(np.double) ** 2     # now becomes np.double again
 
     # We now need to add up the probs of all auxiliary qubits
+    #   then put the labels as right-to-left using swaps[]
     # We are imagining that the n_count qubits are being measured,
     #   and that the other qubits are not being measured.
-    probs = [sum( probs[ i*step : (i+1)*step ] ) for i in range(length)]
+    probs = swaps @ [sum( probs[ i*step : (i+1)*step ] ) for i in range(length)]
 
     print(' --simulation finished--', time.time(), flush=True)
 
     # qft_dagger can introduce very small numbers in place of what should be 0's
-    return np.around(probs, 6)
+    return np.around(probs, 30)
 
 
 
@@ -232,7 +320,22 @@ print("\n N =", N)
 print(" n_count =", n_count)
 
 
+# make some relatively-small global arrays
+qft_dagger = make_qft_dagger(n_count)
+swaps = getSwaps(n_count)
+# computer starts in state [1,0,0,...,0], that is, with all qubits being 0
+state1 = np.kron(make_multiH(n_count), make_oneState(bits))[:,0]
 
+
+
+'''
+# For testing purposes...
+#matrix = CPhaseGate(np.pi, 0, n_count-1)
+matrix = make_qft_dagger(n_count)
+np.set_printoptions(threshold=np.inf)
+print(np.around( matrix, 5))
+exit()
+'''
 
 
 # In reality, you'd probably stop the algorithm once a factor was found,
@@ -245,15 +348,10 @@ print(" n_count =", n_count)
 # N=65 has a = 8,18,47,57 give 0 probability of success for n_count = bits - 1.
 # N=77 has many a's that give 0 probability of success for n_count = bits - 1.
 #   This happens if and only if the cycle length is 15 or 30.
-#   n_count >= bits starts to get better probability of success for these a's,
+#   n_count >= bits starts to get better probability of success,
 #   and I read somewhere that n_count should approximately be 2*bits,
 #   though they didn't say why.
-#   I tested n_count >= bits for a = 3,4,17, but no higher than n_count=15...
-#    - a=4 has r=15 (odd), and it peaks at n_count=8 with 4% probability of success
-#    - a=17 has r=30, but the r,a pair doesn't produce a prime via gcd().
-#        It seems to be asymptote to 20% probability
-#    - a=3 has r=30, and this r,a pair produces primes.
-#        It seems to be asymptote to 46% probability
+
 
 #for a in [2]:
 #for a in [3,4,17]:
@@ -292,11 +390,11 @@ for a in range(2, N-1):
 
             success = False
             guesses = [gcd(a**(r//2)-1, N), gcd(a**(r//2)+1, N)]
-            #print(" Guessed Factors: %i and %i" % (guesses[0], guesses[1]))
+            print(" Guessed Factors: %i and %i" % (guesses[0], guesses[1]))
             for guess in guesses:
                 if guess not in [1,N] and (N % guess) == 0:
                     success = True
-                    #print("*** Non-trivial factor found: %i ***" % guess)
+                    print("*** Non-trivial factor found: %i ***" % guess)
 
             if success:
                 probSuccess += p
