@@ -1,10 +1,11 @@
 # Shor's Algorithm
-Use NumPy instead of Qiskit to simulate a quantum computer to perform Shor's algorithm on any suitable integer.
+Use NumPy instead of Qiskit to simulate a quantum computer to perform Shor's algorithm on any suitable integer. This uses much less RAM and runtime.
 
 I used NumPy because I found a bug in Qiskit, though NumPy and Qiskit codes give the same results in special cases where I could avoid Qiskit's bug. Testing Qiskit with NumPy has allowed me to greatly understand the math of quantum computers!
 
 Each Python file is standalone. **See the comments at the top of each file! Especially read the top of shor.py for lots of good information!**
 * **shor.py**: simulates the quantum computer to perform Shor's algorithm
+* **shorSlow.py**: is an old version of shor.py that calculates and stores huge matrices. I provide it because, if you want to understand shor.py, you need to understand this first. I wrote what is now shorSlow.py based on Qiskit code (linked to below), then the modern shor.py took the readable shorSlow.py and made it *fast*.
 * **shorScan.py**: classically finds cycle lengths of various N's (and *a*'s) instead of using Shor's quantum algorithm. This file is useful for understanding the results of Shor's algorithm
 * **shorModCircuit.py**: for trying to figure out quantum circuits to do times-*a*-mod-N math. You can happily ignore this file!
 
