@@ -75,6 +75,8 @@ import numpy as np    # pip install numpy
 from fractions import Fraction
 import time
 
+from numba import jit, prange   # pip install numba
+
 from math import gcd, log
 # np.gcd(A,B) has a bug for A or B in interval [2^63, 2^64)
 #   that causes the code to crash, so use math.gcd()
@@ -92,16 +94,15 @@ from gmpy2 import is_strong_bpsw_prp     # pip install gmpy2
 # Set N, an odd integer such that N > 2
 # Not-prime odd N less than 128 are: 9, 15, 21, 25, 27, 33, 35, 39, 45, 49, 51, 55, 57, 63,
 #   65, 69, 75, 77, 81, 85, 87, 91, 93, 95, 99, 105, 111, 115, 117, 119, 121, 123, 125
-# If using 9+8 qubits (bits + n_count)...
-#   The 17 qubits make a vector of 2^17 numbers.
+# If using 10+9 qubits (bits + n_count)...
+#   The 19 qubits make a vector of 2^19 numbers.
 #   On my computer, each np.csingle or np.double is 2^3 bytes,
-#     so 2^20 bytes = 1 MiB for one vector.
+#     so 2^22 bytes = 4 MiB for one vector.
 #   In general, RAM should be proportional to 2^(bits + n_count).
-#   And 9+8 takes 1.5 seconds for each of the coprime a's
-#     on my crappy x86-64 CPU core.
-#   Runtime is affected by n_count much more than by bits.
+#   And 10+9 takes 1 second for each of the coprime a's
+#     on my crappy dual-core x86-64 CPU core.
 
-N = 77
+N = 123
 
 
 
@@ -151,6 +152,17 @@ def amodN(a, power, bits, N):
 
 
 
+# Compile and multithread the calculations that take a lot of runtime.
+# The first call to do_fast() will take longer due to compile time.
+# Takes a bit more RAM though.
+@jit(nopython=True, parallel=True)
+def do_fast(state, stateOld, mult, length, step):
+    for i in prange(length):     # rows of QFTdagger
+        for j in range(length):  # columns of QFTdagger
+            state[ i*step:(i+1)*step ] += np.exp(mult*i*j) * stateOld[ j*step:(j+1)*step ]
+
+
+
 
 def simulateShor(a, n_count, bits, N):
 
@@ -177,12 +189,11 @@ def simulateShor(a, n_count, bits, N):
     #   np.cdouble (complex128 on my computer) uses more RAM,
     #   and it is slower than np.csingle (complex64 on my computer)
     #   perhaps due to RAM bandwidth
+    # The double FOR loop is slow in Python.
     stateOld = state.astype(np.csingle)
     state = np.zeros(len(state), dtype=np.csingle)
     mult = np.array(-np.pi * 1.0j / (1 << (n_count - 1))).astype(np.csingle)
-    for i in range(length):      # rows of QFTdagger
-        for j in range(length):  # columns of QFTdagger
-            state[ i*step:(i+1)*step ] += np.exp(mult*i*j) * stateOld[ j*step:(j+1)*step ]
+    do_fast(state, stateOld, mult, length, step)  # use numba!
     del stateOld
     state /= np.sqrt(length)
 
