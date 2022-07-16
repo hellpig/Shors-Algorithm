@@ -338,7 +338,7 @@ exit()
 '''
 
 
-# In reality, you'd probably stop the algorithm once a factor was found,
+# In practice, you'd probably stop the algorithm once a factor was found,
 #   but, for analysis, I make a loop over all a's and all non-zero in probs[].
 # If you instead want to get specific results,
 #   do something like the following to get i and p from probs[]...

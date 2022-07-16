@@ -91,6 +91,11 @@ from gmpy2 import is_strong_bpsw_prp     # pip install gmpy2
 
 
 
+####################################
+## Set parameters
+####################################
+
+
 # Set N, an odd integer such that N > 2
 # Not-prime odd N less than 128 are: 9, 15, 21, 25, 27, 33, 35, 39, 45, 49, 51, 55, 57, 63,
 #   65, 69, 75, 77, 81, 85, 87, 91, 93, 95, 99, 105, 111, 115, 117, 119, 121, 123, 125
@@ -139,9 +144,25 @@ n_count = bits - 1
 
 
 
+# Should we "cheat" by classically finding the period for each of the a's?
+# For a period T, this allows for a simpler cycle...
+#   0,1,2,...,(T-1),0,1,...
+# Of course, a quantum computer wouldn't use this speedup,
+#   but simulating a quantum computer with a classical computer could.
+# This "cheat" also reduces RAM usage.
+# The resulting probabilities are not affected.
+
+cheat = True
+
+
+
+####################################
+## Define functions
+####################################
 
 
 # Returns indices for performing the times-a-to-power-mod-N operator.
+# This is for when cheat=False
 def amodN(a, power, bits, N):
     a = (a ** power)%N
     indices = np.asarray([i for i in range(1 << bits)]) 
@@ -163,7 +184,7 @@ def do_fast(state, stateOld, mult, length, step):
 
 
 
-
+# for not "cheating"
 def simulateShor(a, n_count, bits, N):
 
     print(' --starting simulation--', time.time(), flush=True)
@@ -193,7 +214,7 @@ def simulateShor(a, n_count, bits, N):
     stateOld = state.astype(np.csingle)
     state = np.zeros(len(state), dtype=np.csingle)
     mult = np.array(-np.pi * 1.0j / (1 << (n_count - 1))).astype(np.csingle)
-    do_fast(state, stateOld, mult, length, step)  # use numba!
+    do_fast(state, stateOld, mult, length, step)  # use Numba to fill state[]
     del stateOld
     state /= np.sqrt(length)
 
@@ -219,6 +240,75 @@ def simulateShor(a, n_count, bits, N):
 
 
 
+# for "cheating"
+def simulateShorCheat(a, n_count, N):
+
+    print(' --starting simulation--', time.time(), flush=True)
+
+    length = 1 << n_count
+
+    # get period
+    x = [1,a]
+    last = a
+    while True:
+        last = (last*a) % N
+        x.append( last )
+        if (last == 1):
+            break
+    step = len(x) - 1  # step is the period
+    del x
+
+    # take care of initial Hadamard gates and NOT gate
+    state = np.zeros( length * step )
+    state[1::step] = 1.0 / np.sqrt(2) ** n_count
+
+    # do the times-a-to-power-mod-N part of circuit
+    for q in range(n_count):
+
+        U = np.asarray([i for i in range(step)]) 
+        U = (U + (1 << q)) % step    # power = 1 << q
+
+        for i in range(length):
+            if ( i >> q ) & 1:   # control U's starting at the bottom of the n_count qubits
+                state[ i*step:(i+1)*step ] = state[ i*step:(i+1)*step ][U]
+
+    del U
+
+    # Complex numbers are now needed for the QFTdagger.
+    #   np.cdouble (complex128 on my computer) uses more RAM,
+    #   and it is slower than np.csingle (complex64 on my computer)
+    #   perhaps due to RAM bandwidth
+    # The double FOR loop is slow in Python.
+    stateOld = state.astype(np.csingle)
+    state = np.zeros(len(state), dtype=np.csingle)
+    mult = np.array(-np.pi * 1.0j / (1 << (n_count - 1))).astype(np.csingle)
+    do_fast(state, stateOld, mult, length, step)  # use Numba to fill state[]
+    del stateOld
+    state /= np.sqrt(length)
+
+    '''
+    # For testing purposes...
+    np.set_printoptions(threshold=np.inf)
+    print(state)
+    '''
+
+    probs = np.absolute(state).astype(np.double) ** 2       # now becomes np.double again
+
+    # We now need to add up the probs of all auxiliary qubits
+    # We are imagining that the n_count qubits are being measured,
+    #   and that the other qubits are not being measured.
+    probs = [sum( probs[ i*step : (i+1)*step ] ) for i in range(length)]
+
+    print(' --simulation finished--', time.time(), flush=True)
+
+    # qft_dagger can introduce very small numbers in place of what should be 0's
+    return np.around(probs, 6)
+
+
+
+####################################
+## Do Shor's Algorithm!
+####################################
 
 # N should not equal prime^k
 # It's easier to check that N isn't any integer to a power, so I do that.
@@ -246,7 +336,7 @@ print(" n_count =", n_count)
 
 
 
-# In reality, you'd probably stop the algorithm once a factor was found,
+# In practice, you'd probably stop the algorithm once a factor was found,
 #   but, for analysis, I make a loop over all a's and all non-zero in probs[].
 # If you instead want to get specific results,
 #   do something like the following to get i and p from probs[]...
@@ -259,12 +349,12 @@ print(" n_count =", n_count)
 #   n_count >= bits starts to get better probability of success for these a's,
 #   and I read somewhere that n_count should approximately be 2*bits,
 #   though they didn't say why.
-#   I tested n_count >= bits for a = 3,4,17, but no higher than n_count=15...
+#   I tested n_count >= bits for a = 3,4,17, but no higher than n_count=17...
 #    - a=4 has r=15 (odd), and it peaks at n_count=8 with 4% probability of success
-#    - a=17 has r=30, but the r,a pair doesn't produce a prime via gcd().
-#        It seems to be asymptote to 20% probability
+#    - a=17 has r=30, but the r,a pair doesn't produce any primes via gcd().
+#        It seems to asymptote to 20% probability
 #    - a=3 has r=30, and this r,a pair produces primes.
-#        It seems to be asymptote to 46% probability
+#        It seems to asymptote to 46.7% probability
 
 #for a in [2]:
 #for a in [3,4,17]:
@@ -278,7 +368,10 @@ for a in range(2, N-1):
         print("\n*** Non-trivial factor found: gcd(a,N) = %i ***" % test)
         continue
 
-    probs = simulateShor(a, n_count, bits, N)
+    if cheat:
+        probs = simulateShorCheat(a, n_count, N)
+    else:
+        probs = simulateShor(a, n_count, bits, N)
 
     '''
     # for testing purposes...
