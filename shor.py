@@ -263,16 +263,11 @@ def simulateShorCheat(a, n_count, N):
     state[1::step] = 1.0 / np.sqrt(2) ** n_count
 
     # do the times-a-to-power-mod-N part of circuit
-    for q in range(n_count):
-
-        U = np.asarray([i for i in range(step)]) 
-        U = (U + (1 << q)) % step    # power = 1 << q
-
+    for q in range(n_count):   # 2^q is the power
         for i in range(length):
             if ( i >> q ) & 1:   # control U's starting at the bottom of the n_count qubits
-                state[ i*step:(i+1)*step ] = state[ i*step:(i+1)*step ][U]
+                state[ i*step:(i+1)*step ] = np.roll(state[ i*step:(i+1)*step ], 1 << q, axis=0)
 
-    del U
 
     # Complex numbers are now needed for the QFTdagger.
     #   np.cdouble (complex128 on my computer) uses more RAM,

@@ -12,11 +12,13 @@
 # The hope is to find some patterns that can be used for quickly
 # finding large-N circuits.
 #
-# In the future, I may extend the code to do sqrt(X) and sqrt(X)-dagger gates.
-# But I have no desire to reduce the number of bits by using patterns in the cycles
+# In the future...
+#  - I may extend the code to do sqrt(X) and sqrt(X)-dagger gates.
+#  - I have no desire to reduce the number of bits by using patterns in the cycles
 #   because why do Shor's algorithm if you already know the cycle lengths?
-# Since the times-a-mod-N gates are to be controlled, I could also play around
+#  - Since the times-a-mod-N gates are to be controlled, I could also play around
 #   with the idea of only controlling some of the gates in the times-a-mod-N gate.
+#  - I should use Cython to speed it up? I can't get Numba to work
 #
 # I believe SWAP and NOT gates and all the ways of controlling them are enough to
 #   realize any times-a-mod-N gate.
@@ -40,8 +42,11 @@
 
 
 import numpy as np
-from itertools import compress, product, combinations
 np.set_printoptions(threshold=np.inf)
+
+from itertools import compress, product, combinations
+
+
 
 
 ################################################
