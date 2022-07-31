@@ -81,13 +81,16 @@ from math import gcd, log
 # np.gcd(A,B) has a bug for A or B in interval [2^63, 2^64)
 #   that causes the code to crash, so use math.gcd()
 
+
 # Import the is_strong_bpsw_prp(N) function for probable prime testing.
 # https://www.youtube.com/watch?v=jbiaz_aHHUQ&t=0s
 # https://gmpy2.readthedocs.io/en/latest/advmpz.html#advanced-number-theory-functions
-# I'd use the ECPP method if I wanted a deterministic prime test...
-#   https://github.com/root-z/ECPP
-#   from prime_test import prime
 from gmpy2 import is_strong_bpsw_prp     # pip install gmpy2
+
+# I'd use the ECPP method or APR-CL method if I wanted a proven prime test.
+# Here is the only Python 3 code I could find...
+#   https://github.com/wacchoz/APR_CL
+#   from APR_CL import APRtest
 
 
 
