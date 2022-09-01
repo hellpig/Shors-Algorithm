@@ -17,8 +17,7 @@
 #
 # The following link is good at providing the circuit,
 # but it doesn't really explain how it works,
-# and it writes a^2^j when it means a^(2^j).
-# Note that a^2^j = (a^2)^j = a^(2*j).
+# and note that a^2^j means a^(2^j).
 # I used the following link to build my circuit...
 #   https://qiskit.org/textbook/ch-algorithms/shor.html
 # Changes I made to their circuit...
