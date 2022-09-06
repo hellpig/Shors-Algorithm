@@ -147,7 +147,7 @@ n_count = bits - 1
 
 
 # Should we "cheat" by classically finding the period for each of the a's?
-# For a period T, this allows for a simpler cycle...
+# For a period T, this allows for a simpler faster cycle...
 #   0,1,2,...,(T-1),0,1,...
 # Of course, a quantum computer wouldn't use this speedup,
 #   but simulating a quantum computer with a classical computer could.
@@ -240,6 +240,16 @@ def simulateShor(a, n_count, bits, N):
 
 
 
+# for "cheating"
+# Compile and multithread the calculations that take a lot of runtime.
+# The first call to do_fast_cheat() will take longer due to compile time.
+# Takes a bit more RAM though.
+@jit(nopython=True, parallel=True)
+def do_fast_cheat(state, stateReduced, mult, length, T):
+    for i in prange(length):     # rows of QFTdagger
+        for j in range(length):  # columns of QFTdagger
+            state[ i*T + stateReduced[j] ] += np.exp(mult*i*j)
+
 
 
 # for "cheating"
@@ -249,7 +259,7 @@ def simulateShorCheat(a, n_count, N):
 
     length = 1 << n_count
 
-    # get period
+    # get period T
     x = [1,a]
     last = a
     while True:
@@ -257,31 +267,35 @@ def simulateShorCheat(a, n_count, N):
         x.append( last )
         if (last == 1):
             break
-    step = len(x) - 1  # step is the period
+    T = len(x) - 1
     del x
 
+    # I don't expect the following error to occur!
+    if T >= (1 << 32):
+        print("  ERROR: uint32 is not large enough.")
+        exit()
+
     # take care of initial Hadamard gates and NOT gate
-    state = np.zeros( length * step )
-    state[1::step] = 1.0 / np.sqrt(2) ** n_count
+    stateReduced = np.zeros( length, dtype=np.uint32 )   # takes values in the interval [0,T)
+    value = 1.0 / np.sqrt(2) ** n_count
 
     # do the times-a-to-power-mod-N part of circuit
     for q in range(n_count):   # 2^q is the power
         for i in range(length):
             if ( i >> q ) & 1:   # control U's starting at the bottom of the n_count qubits
-                state[ i*step:(i+1)*step ] = np.roll(state[ i*step:(i+1)*step ], 1 << q, axis=0)
+                stateReduced[i] = ( stateReduced[i] + (1 << q) ) % T
 
-
-    # Complex numbers are now needed for the QFTdagger.
+    # Complex numbers are needed for the QFTdagger.
     #   np.cdouble (complex128 on my computer) uses more RAM,
     #   and it is slower than np.csingle (complex64 on my computer)
     #   perhaps due to RAM bandwidth
     # The double FOR loop is slow in Python.
-    stateOld = state.astype(np.csingle)
-    state = np.zeros(len(state), dtype=np.csingle)
+    state = np.zeros(length * T, dtype=np.csingle)
     mult = np.array(-np.pi * 1.0j / (1 << (n_count - 1))).astype(np.csingle)
-    do_fast(state, stateOld, mult, length, step)  # use Numba to fill state[]
-    del stateOld
-    state /= np.sqrt(length)
+    T_numba = np.array(T).astype(np.uint32)
+    do_fast_cheat(state, stateReduced, mult, length, T_numba)  # use Numba to fill state[]
+    del stateReduced
+    state *= value / np.sqrt(length)
 
     '''
     # For testing purposes...
@@ -294,7 +308,7 @@ def simulateShorCheat(a, n_count, N):
     # We now need to add up the probs of all auxiliary qubits
     # We are imagining that the n_count qubits are being measured,
     #   and that the other qubits are not being measured.
-    probs = [sum( probs[ i*step : (i+1)*step ] ) for i in range(length)]
+    probs = [sum( probs[ i*T : (i+1)*T ] ) for i in range(length)]
 
     print(' --simulation finished--', time.time(), flush=True)
 
