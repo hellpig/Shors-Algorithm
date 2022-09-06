@@ -100,15 +100,14 @@ for N in range(3, 1 << 8, 2):  # only odd N's
         '''
         if ( gcd(a,N) == 1 ):
 
-            # find period
-            x = [1,a]
+            # find period r
+            r = 2
             last = a
             while True:
                 last = (last*a) % N
-                x.append( last )
                 if (last == 1):
                     break
-            r = len(x) - 1   # period
+                r += 1
 
             # see if r gives factors and print
             if r&1:

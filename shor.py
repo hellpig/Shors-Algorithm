@@ -97,6 +97,9 @@ from gmpy2 import is_strong_bpsw_prp     # pip install gmpy2
 ## Set parameters
 ####################################
 
+# Note that if variables bits or n_count are 32 or larger (huge by the way),
+#   I'd make sure that the compiled Numba function isn't overflowing.
+
 
 # Set N, an odd integer such that N > 2
 # Not-prime odd N less than 128 are: 9, 15, 21, 25, 27, 33, 35, 39, 45, 49, 51, 55, 57, 63,
@@ -106,10 +109,11 @@ from gmpy2 import is_strong_bpsw_prp     # pip install gmpy2
 #   On my computer, each np.csingle or np.double is 2^3 bytes,
 #     so 2^22 bytes = 4 MiB for one vector.
 #   In general, RAM should be proportional to 2^(bits + n_count).
-#   And 10+9 takes 1 second for each of the coprime a's
+#   And N=1023 (with n_count=9) takes 123 seconds to run all of the coprime a's
 #     on my crappy dual-core x86-64 CPU core.
+#     If we choose to "cheat", it takes 19 seconds.
 
-N = 123
+N = 1023
 
 
 
@@ -147,7 +151,7 @@ n_count = bits - 1
 
 
 # Should we "cheat" by classically finding the period for each of the a's?
-# For a period T, this allows for a simpler faster cycle...
+# For a period T, this allows for a simpler cycle...
 #   0,1,2,...,(T-1),0,1,...
 # Of course, a quantum computer wouldn't use this speedup,
 #   but simulating a quantum computer with a classical computer could.
@@ -175,14 +179,15 @@ def amodN(a, power, bits, N):
 
 
 
+
 # Compile and multithread the calculations that take a lot of runtime.
 # The first call to do_fast() will take longer due to compile time.
 # Takes a bit more RAM though.
 @jit(nopython=True, parallel=True)
-def do_fast(state, stateOld, mult, length, step):
+def do_fast(state, stateReduced, mult, length, step):
     for i in prange(length):     # rows of QFTdagger
         for j in range(length):  # columns of QFTdagger
-            state[ i*step:(i+1)*step ] += np.exp(mult*i*j) * stateOld[ j*step:(j+1)*step ]
+            state[ i*step + stateReduced[j] ] += np.exp(mult*i*j)
 
 
 
@@ -192,8 +197,13 @@ def simulateShor(a, n_count, bits, N):
     print(' --starting simulation--', time.time(), flush=True)
 
     # take care of initial Hadamard gates and NOT gate
-    state = np.zeros( 1 << (bits + n_count) )
-    state[1::(1 << bits)] = 1.0 / np.sqrt(2) ** n_count
+    stateReduced = np.ones( 1 << (bits + n_count), dtype=np.uint32 )  # takes values in [1,step)
+    value = 1.0 / np.sqrt(2) ** n_count
+
+    # I don't expect the following error to occur!
+    if bits > 32:
+        print("  ERROR: uint32 is not large enough.")
+        exit()
 
     # do the amodN() part of circuit
     length = 1 << n_count
@@ -204,21 +214,20 @@ def simulateShor(a, n_count, bits, N):
 
         for i in range(length):
             if ( i >> q ) & 1:   # control U's starting at the bottom of the n_count qubits
-                state[ i*step:(i+1)*step ] = state[ i*step:(i+1)*step ][U]
+                stateReduced[i] = U[stateReduced[i]]
 
     del U
 
-    # Complex numbers are now needed for the QFTdagger.
+    # Complex numbers are needed for the QFTdagger.
     #   np.cdouble (complex128 on my computer) uses more RAM,
     #   and it is slower than np.csingle (complex64 on my computer)
     #   perhaps due to RAM bandwidth
     # The double FOR loop is slow in Python.
-    stateOld = state.astype(np.csingle)
-    state = np.zeros(len(state), dtype=np.csingle)
+    state = np.zeros( length*step, dtype=np.csingle )
     mult = np.array(-np.pi * 1.0j / (1 << (n_count - 1))).astype(np.csingle)
-    do_fast(state, stateOld, mult, length, step)  # use Numba to fill state[]
-    del stateOld
-    state /= np.sqrt(length)
+    do_fast(state, stateReduced, mult, length, step)  # use Numba to fill state[]
+    del stateReduced
+    state *= value / np.sqrt(length)
 
     '''
     # For testing purposes...
@@ -240,16 +249,6 @@ def simulateShor(a, n_count, bits, N):
 
 
 
-# for "cheating"
-# Compile and multithread the calculations that take a lot of runtime.
-# The first call to do_fast_cheat() will take longer due to compile time.
-# Takes a bit more RAM though.
-@jit(nopython=True, parallel=True)
-def do_fast_cheat(state, stateReduced, mult, length, T):
-    for i in prange(length):     # rows of QFTdagger
-        for j in range(length):  # columns of QFTdagger
-            state[ i*T + stateReduced[j] ] += np.exp(mult*i*j)
-
 
 
 # for "cheating"
@@ -260,30 +259,22 @@ def simulateShorCheat(a, n_count, N):
     length = 1 << n_count
 
     # get period T
-    x = [1,a]
+    T = 2
     last = a
     while True:
         last = (last*a) % N
-        x.append( last )
         if (last == 1):
             break
-    T = len(x) - 1
-    del x
+        T += 1
 
     # I don't expect the following error to occur!
     if T >= (1 << 32):
         print("  ERROR: uint32 is not large enough.")
         exit()
 
-    # take care of initial Hadamard gates and NOT gate
-    stateReduced = np.zeros( length, dtype=np.uint32 )   # takes values in the interval [0,T)
+    # take care of circuit up to QFTdagger
     value = 1.0 / np.sqrt(2) ** n_count
-
-    # do the times-a-to-power-mod-N part of circuit
-    for q in range(n_count):   # 2^q is the power
-        for i in range(length):
-            if ( i >> q ) & 1:   # control U's starting at the bottom of the n_count qubits
-                stateReduced[i] = ( stateReduced[i] + (1 << q) ) % T
+    stateReduced = np.array( [i%T for i in range(length)], dtype=np.uint32 )
 
     # Complex numbers are needed for the QFTdagger.
     #   np.cdouble (complex128 on my computer) uses more RAM,
@@ -293,7 +284,7 @@ def simulateShorCheat(a, n_count, N):
     state = np.zeros(length * T, dtype=np.csingle)
     mult = np.array(-np.pi * 1.0j / (1 << (n_count - 1))).astype(np.csingle)
     T_numba = np.array(T).astype(np.uint32)
-    do_fast_cheat(state, stateReduced, mult, length, T_numba)  # use Numba to fill state[]
+    do_fast(state, stateReduced, mult, length, T_numba)  # use Numba to fill state[]
     del stateReduced
     state *= value / np.sqrt(length)
 
