@@ -87,9 +87,27 @@ from math import gcd, log
 from gmpy2 import is_strong_bpsw_prp     # pip install gmpy2
 
 # I'd use the ECPP method or APR-CL method if I wanted a proven prime test.
+#
 # Here is the only Python 3 code I could find...
 #   https://github.com/wacchoz/APR_CL
 #   from APR_CL import APRtest
+#
+# For a much faster APR-CL implementation, download...
+#   https://sourceforge.net/projects/mpzaprcl/
+# In the .c file, I added the following function to the end...
+#   int aprcl(char *s) {
+#     mpz_t N;
+#     mpz_init_set_str(N, s, 10);
+#     return mpz_aprcl(N);
+#   }
+# Compile via...
+#   gcc -O3 mpz_aprcl.c -lgmp -shared -o libaprcl.so
+# You can then do the following in Python...
+#   import ctypes
+#   fun = ctypes.CDLL("./libaprcl.so")
+#   print(fun.aprcl( str(13).encode() ))
+# On Windows, you can use Mingw-w64 to create a .dll file.
+
 
 
 
